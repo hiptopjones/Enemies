@@ -1,6 +1,8 @@
 using System.Collections;
 using System.Collections.Generic;
+using Unity.Burst.CompilerServices;
 using UnityEngine;
+using static RootMotion.FinalIK.GrounderQuadruped;
 
 public class Robot : MonoBehaviour
 {
@@ -26,5 +28,8 @@ public class Robot : MonoBehaviour
     {
         // Adjust the position
         transform.position = new Vector3(transform.position.x, legsController.AverageTerrainHeight + robotHeight, transform.position.z);
+
+        Vector3 forward = Vector3.Cross(transform.right, legsController.AverageFootNormal);
+        transform.rotation = Quaternion.LookRotation(forward, legsController.AverageFootNormal);
     }
 }

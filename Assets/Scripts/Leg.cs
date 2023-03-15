@@ -27,13 +27,7 @@ public class Leg : MonoBehaviour
     private float stepSpeed = 0.5f;
 
     [SerializeField]
-    private float minStepDistance = 1f;
-
-    [SerializeField]
-    private float minBalanceDistance = 0.01f;
-
-    [SerializeField]
-    private float minMovementDistance = 0.001f;
+    private float minStepDistance = 0.01f;
 
     [SerializeField]
     private AnimationCurve stepArcCurve;
@@ -42,28 +36,20 @@ public class Leg : MonoBehaviour
     private Leg[] alternatingLegs;
 
     [SerializeField]
-    private float minStepDelay = 0.2f;
-
-    [SerializeField]
-    private float minBalanceDelay = 0.5f;
+    private float minStepDelay = 0.1f;
 
     private Transform foot;
     private Quaternion footRotation;
 
-    private Transform hip;
-
     private float stepProgress = 1f;
-
     private float lastStepTime;
-    private float lastMovementTime;
-
-    private Vector3 lastStepTargetPosition;
 
     private int groundLayerMask;
 
     public bool IsStepping => stepProgress < 1f;
 
     public Vector3 TargetPosition => target.transform.position;
+    public Vector3 FootNormal { get; private set; }
 
     public Vector3 Velocity { get; set; }
 
@@ -74,11 +60,7 @@ public class Leg : MonoBehaviour
         IKSolver solver = GetComponent<IK>().GetIKSolver();
         solver.OnPostUpdate += OnIkPostUpdate;
 
-        hip = solver.GetPoints().First().transform;
         foot = solver.GetPoints().Last().transform;
-
-        // Assumes that the starting rotation of the foot is what we want to maintain
-        footRotation = foot.rotation;
 
         target.position = GetStepTargetPosition();
     }
@@ -96,35 +78,18 @@ public class Leg : MonoBehaviour
             return;
         }
 
-        // Avoids a stuttering effect where one leg is always moving (e.g. when turning in a circle)
+        // Helps prevent a stuttering effect where one leg is always moving and the others are starved out
+        // In other words, this delay helps to offset the fixed order of Update() calls and gives all legs a chance to move
+        // Acheiving satisfying results may require tuning the delay time, along with step time, and body speed
         if (Time.time - lastStepTime < minStepDelay)
         {
             return;
         }
 
-        Vector3 stepTargetPosition = GetStepTargetPosition();
-
-        float distance = Vector3.Distance(target.position, stepTargetPosition);
+        float distance = Vector3.Distance(target.position, GetStepTargetPosition());
         if (distance > minStepDistance)
         {
-            // TODO: Make the steps mostly symmetrical in their cadence
-            //  - Currently the steps can take on all sorts of awkward rhythms
-
-            StartCoroutine(CoStepToPosition(target.position, stepTargetPosition));
-        }
-        else if (distance > minBalanceDistance)
-        {
-            // TODO: Avoid re-balancing when actively moving
-            //  - This is happening now during the time where the user is moving, but the first step has not be triggered yet.
-            //  - Probably want to check for active input, rather than trying to detect motion using step targets
-
-            if (Time.time - lastStepTime < minBalanceDelay)
-            {
-                return;
-            }
-
-            // No leaning when we're still.  Always choose to balance ourselves if we're out of position.
-            StartCoroutine(CoStepToPosition(target.position, stepTargetPosition));
+            StartCoroutine(CoExecuteStep(target.position));
         }
     }
 
@@ -143,7 +108,7 @@ public class Leg : MonoBehaviour
         return hit.point + hit.normal * footHeight;
     }
 
-    private IEnumerator CoStepToPosition(Vector3 startPosition, Vector3 endPosition)
+    private IEnumerator CoExecuteStep(Vector3 startPosition)
     {
         stepProgress = 0;
 
@@ -152,7 +117,7 @@ public class Leg : MonoBehaviour
             stepProgress += Time.deltaTime * stepSpeed;
 
             // Keep updating the target position as we move so we don't fall behind
-            endPosition = GetStepTargetPosition();
+            Vector3 endPosition = GetStepTargetPosition();
 
             target.position = Vector3.Lerp(startPosition, endPosition, stepProgress);
             target.position += Vector3.up * stepArcCurve.Evaluate(stepProgress);
@@ -165,7 +130,27 @@ public class Leg : MonoBehaviour
 
     private void OnIkPostUpdate()
     {
-        // Update the foot rotation after IK solve
-        foot.transform.rotation = footRotation;
+        UpdateFootOrientation();
+    }
+
+    private void UpdateFootOrientation()
+    {
+        RaycastHit hit;
+        if (!Physics.Raycast(foot.position, Vector3.down, out hit, raycastDistance, groundLayerMask))
+        {
+            throw new Exception("Foot raycast was unsuccessful");
+        }
+
+        FootNormal = hit.normal;
+
+        // Keeps the foot level with the ground, but still oriented correctly with the leg
+        Vector3 forward = Vector3.Cross(transform.up, hit.normal);
+        foot.transform.rotation = Quaternion.LookRotation(forward, hit.normal) * Quaternion.Euler(-90, 0, 0);
+    }
+
+    private void OnDrawGizmos()
+    {
+        Gizmos.color = Color.blue;
+        Gizmos.DrawCube(foot.transform.position, Vector3.one * 0.02f);
     }
 }

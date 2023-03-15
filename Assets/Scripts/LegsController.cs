@@ -9,6 +9,7 @@ public class LegsController : MonoBehaviour
     private Leg[] legs;
 
     public float AverageTerrainHeight { get; private set; }
+    public Vector3 AverageFootNormal { get; private set; }
 
     private void Start()
     {
@@ -18,11 +19,15 @@ public class LegsController : MonoBehaviour
     private void Update()
     {
         AverageTerrainHeight = 0;
+        AverageFootNormal = Vector3.zero;
 
-        float legWeight = 1f / legs.Length;
         foreach (Leg leg in legs)
         {
-            AverageTerrainHeight += leg.TargetPosition.y * legWeight;
+            AverageTerrainHeight += leg.TargetPosition.y;
+            AverageFootNormal += leg.FootNormal;
         }
+
+        AverageTerrainHeight /= legs.Length;
+        AverageFootNormal = AverageFootNormal.normalized;
     }
 }

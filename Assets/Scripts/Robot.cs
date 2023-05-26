@@ -29,6 +29,7 @@ public class Robot : MonoBehaviour
         // Adjust the position
         transform.position = new Vector3(transform.position.x, legsController.AverageTerrainHeight + robotHeight, transform.position.z);
 
+        // Orient the body with the average foot height
         Vector3 forward = Vector3.Cross(transform.right, legsController.AverageFootNormal);
         transform.rotation = Quaternion.LookRotation(forward, legsController.AverageFootNormal);
     }
